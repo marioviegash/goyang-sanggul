@@ -1,0 +1,278 @@
+/* TikTok Font Declarations */
+@font-face {
+    font-family: 'TikTok-Display-Bold';
+    src: url('fonts/TikTok-Display-Bold.otf') format('opentype');
+    font-weight: bold;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'TikTok-Sans-Text-Bold';
+    src: url('fonts/TikTok-Sans-Text-Bold.otf') format('opentype');
+    font-weight: bold;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'TikTok-Sans-Display-Bold';
+    src: url('fonts/TikTok-Sans-Display-Bold.otf') format('opentype');
+    font-weight: bold;
+    font-style: normal;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Arial', sans-serif;
+    background: #000;
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    overflow: hidden;
+    color: white;
+    -webkit-text-size-adjust: 100%;
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: manipulation;
+}
+
+/* Front Screen Styles */
+.front-screen {
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #8B4513; /* Fallback background color matching the design */
+}
+
+.opening-bg {
+    width: 100vw;
+    height: 100vh;
+    object-fit: contain;
+    object-position: center;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+}
+
+.start-button {
+    position: absolute;
+    top: 75%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    z-index: 2;
+    transition: transform 0.3s ease;
+}
+
+.start-button:hover {
+    transform: translateX(-50%) scale(1.05);
+}
+
+.button-image {
+    width: auto;
+    height: auto;
+    max-width: 200px;
+    max-height: 80px;
+    display: block;
+}
+
+
+/* Loading Screen */
+.loading-screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #8B4513; /* Dark brown background */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.loading-content {
+    text-align: center;
+    color: white;
+}
+
+.loading-spinner {
+    width: 60px;
+    height: 60px;
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-top: 4px solid white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 20px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading-text {
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 10px;
+    font-family: Arial, sans-serif;
+}
+
+.loading-subtext {
+    font-size: 16px;
+    opacity: 0.8;
+    font-family: Arial, sans-serif;
+}
+
+/* Game Container */
+.game-container {
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #8B4513; /* Dark brown background */
+}
+
+.ornate-frame {
+    width: 90vw;
+    max-width: 500px;
+    height: 90vh;
+    max-height: 900px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Specific media query for 1080x1920 screens */
+@media screen and (min-width: 1080px) and (min-height: 1900px) {
+    .start-button {
+        top: 88vh;
+    }
+    
+    .button-image {
+        max-width: 45vw;
+        max-height: 20vh;
+    }
+    
+    .restart-button {
+        top: 75%;
+    }
+    
+    /* Ornate frame adjustments */
+    .ornate-frame {
+        width: 100%;
+        height: 100%;
+        max-width: 100vw;
+        max-height: 100vh;
+    }
+    
+    .game-area {
+        margin: 30px;
+        border-radius: 20px;
+    }
+    
+}
+
+.game-area {
+    position: relative;
+    flex: 1;
+    margin: 20px;
+    background: white;
+    border-radius: 10px;
+    overflow: hidden;
+    z-index: 2;
+}
+
+#video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: #000;
+    display: none; /* Hide HTML video element since p5.js handles display */
+}
+
+#canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 3;
+}
+
+/* Style for p5.js canvas */
+canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 3;
+}
+
+/* Closing Screen */
+.closing-screen {
+    width: 100vw;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+.closing-bg {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+}
+
+.restart-button {
+    position: absolute;
+    top: 60%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    z-index: 2;
+    transition: transform 0.3s ease;
+}
+
+.restart-button:hover {
+    transform: translateX(-50%) scale(1.05);
+}
+
+/* Word Display Styles */
+.word-display {
+    display: none; /* Hidden - word is now drawn on canvas */
+}
+
+.word-display.filled {
+    background: rgba(0, 255, 0, 0.2);
+    border-color: #00ff00;
+    color: #00aa00;
+}
+
+/* Word display is now handled by canvas - no additional styles needed */
