@@ -438,6 +438,37 @@ function resetGame() {
     lastImageDrawTime = 0;
 }
 
+// Function to calculate proper canvas dimensions
+function calculateCanvasDimensions() {
+    const targetWidth = 1080;
+    const targetHeight = 1920;
+    const aspectRatio = targetWidth / targetHeight; // 9:16 ratio (0.5625)
+    
+    const maxWidth = windowWidth;
+    const maxHeight = windowHeight;
+    const windowAspectRatio = maxWidth / maxHeight;
+    
+    let canvasWidth, canvasHeight;
+    
+    if (windowAspectRatio > aspectRatio) {
+        // Window is wider than our target ratio - fit to height
+        canvasHeight = Math.min(maxHeight, targetHeight);
+        canvasWidth = Math.round(canvasHeight * aspectRatio);
+    } else {
+        // Window is taller than our target ratio - fit to width  
+        canvasWidth = Math.min(maxWidth, targetWidth);
+        canvasHeight = Math.round(canvasWidth / aspectRatio);
+    }
+    
+    // Ensure minimum playable size
+    if (canvasWidth < 300) {
+        canvasWidth = 300;
+        canvasHeight = Math.round(canvasWidth / aspectRatio);
+    }
+    
+    return { width: canvasWidth, height: canvasHeight };
+}
+
 function initializeGame() {
     // Detect mobile first
     detectMobile();
@@ -445,8 +476,13 @@ function initializeGame() {
     // Get the existing canvas element from HTML
     const canvasElement = document.getElementById('canvas');
     
-    // Create p5.js canvas with the existing canvas element's dimensions
-    const canvas = createCanvas(windowWidth, windowHeight);
+    // Calculate proper canvas size with 9:16 aspect ratio (1080x1920 target)
+    const dimensions = calculateCanvasDimensions();
+    
+    // Create p5.js canvas with proper 9:16 aspect ratio
+    const canvas = createCanvas(dimensions.width, dimensions.height);
+    
+    console.log(`Canvas created: ${dimensions.width}x${dimensions.height} (9:16 ratio, target: 1080x1920)`);
     
     // Replace the existing canvas element with p5's canvas
     if (canvasElement && canvasElement.parentNode) {
@@ -1865,9 +1901,13 @@ function forceDisplayWord() {
 // Handle window resize with mobile detection
 function windowResized() {
     detectMobile(); // Recalculate scaling on resize/orientation change
-    resizeCanvas(windowWidth, windowHeight);
+    
+    // Calculate proper dimensions with 9:16 aspect ratio
+    const dimensions = calculateCanvasDimensions();
+    resizeCanvas(dimensions.width, dimensions.height);
+    
+    console.log(`Canvas resized to: ${dimensions.width}x${dimensions.height} (9:16 ratio)`);
     // Don't resize video - let it maintain natural aspect ratio
-    // Window resized, new scale factor
 }
 
 // Initialize front screen when page loads
