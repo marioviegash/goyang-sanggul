@@ -438,7 +438,7 @@ function resetGame() {
     lastImageDrawTime = 0;
 }
 
-// Function to calculate proper canvas dimensions
+// Function to calculate proper canvas dimensions (mobile responsive)
 function calculateCanvasDimensions() {
     const targetWidth = 1080;
     const targetHeight = 1920;
@@ -452,11 +452,11 @@ function calculateCanvasDimensions() {
     
     if (windowAspectRatio > aspectRatio) {
         // Window is wider than our target ratio - fit to height
-        canvasHeight = Math.min(maxHeight, targetHeight);
+        canvasHeight = maxHeight;
         canvasWidth = Math.round(canvasHeight * aspectRatio);
     } else {
         // Window is taller than our target ratio - fit to width  
-        canvasWidth = Math.min(maxWidth, targetWidth);
+        canvasWidth = maxWidth;
         canvasHeight = Math.round(canvasWidth / aspectRatio);
     }
     
@@ -464,6 +464,12 @@ function calculateCanvasDimensions() {
     if (canvasWidth < 300) {
         canvasWidth = 300;
         canvasHeight = Math.round(canvasWidth / aspectRatio);
+    }
+    
+    // Cap at target size for desktop
+    if (canvasWidth > targetWidth) {
+        canvasWidth = targetWidth;
+        canvasHeight = targetHeight;
     }
     
     return { width: canvasWidth, height: canvasHeight };
@@ -718,9 +724,15 @@ function preload() {
 
 // Setup function called after preload completes
 function setup() {
-    // Create a minimal canvas initially (will be replaced by initializeGame)
+    // Detect mobile and calculate dimensions first
+    detectMobile();
+    
+    // Create an initial canvas with proper sizing (will be replaced by initializeGame)
     // We need this so drawingContext exists for HTML image drawing
-    createCanvas(100, 100);
+    const initialDimensions = calculateCanvasDimensions();
+    createCanvas(initialDimensions.width, initialDimensions.height);
+    
+    console.log(`Initial canvas: ${initialDimensions.width}x${initialDimensions.height}`);
     
     // Load images from HTML and wait for them to be ready
     loadImagesFromHTML().then(() => {
@@ -1793,29 +1805,38 @@ function drawBrandClosingScreen() {
         closingCanvas.style.left = '0';
         closingCanvas.style.width = '100%';
         closingCanvas.style.height = '100%';
+        closingCanvas.style.objectFit = 'contain';
         closingCanvas.style.zIndex = '10000';
         closingScreenElement.appendChild(closingCanvas);
     }
     
-    // Set canvas size
-    closingCanvas.width = window.innerWidth;
-    closingCanvas.height = window.innerHeight;
+    // Set canvas size with device pixel ratio for sharp rendering on mobile
+    const dpr = window.devicePixelRatio || 1;
+    closingCanvas.width = window.innerWidth * dpr;
+    closingCanvas.height = window.innerHeight * dpr;
     const ctx = closingCanvas.getContext('2d');
+    
+    // Scale context for high DPI displays (retina/mobile)
+    ctx.scale(dpr, dpr);
+    
+    // Use logical dimensions for drawing
+    const logicalWidth = window.innerWidth;
+    const logicalHeight = window.innerHeight;
     
     // Use the pre-loaded closing background image
     const closingBg = images['closingBg'];
     if (closingBg) {
         // Draw background (handle both p5.Image and HTML Image)
         const bgImg = closingBg.canvas || closingBg;
-        ctx.drawImage(bgImg, 0, 0, closingCanvas.width, closingCanvas.height);
+        ctx.drawImage(bgImg, 0, 0, logicalWidth, logicalHeight);
         
         // Select random product image for this brand
         const productImages = brandImages[currentBrand];
         const randomProduct = productImages[Math.floor(Math.random() * productImages.length)];
         
         // Calculate positions (similar to the example image layout)
-        const centerX = closingCanvas.width / 2;
-        const centerY = closingCanvas.height / 2.7;
+        const centerX = logicalWidth / 2;
+        const centerY = logicalHeight / 2.7;
         
         // Draw product image centered based on actual image size
         if (randomProduct) {
@@ -1823,8 +1844,8 @@ function drawBrandClosingScreen() {
             const imgWidth = randomProduct.width;
             const imgHeight = randomProduct.height;
             
-            // Calculate max size while maintaining aspect ratio
-            const maxSize = Math.min(closingCanvas.width * 0.5, closingCanvas.height * 0.4);
+            // Calculate max size while maintaining aspect ratio (responsive)
+            const maxSize = Math.min(logicalWidth * 0.5, logicalHeight * 0.4);
             const aspectRatio = imgWidth / imgHeight;
             
             let displayWidth, displayHeight;
@@ -1847,10 +1868,13 @@ function drawBrandClosingScreen() {
             ctx.drawImage(prodImg, productX, productY, displayWidth, displayHeight);
         }
         
-        // Draw brand name at fixed position (independent of image size)
-        const textY = closingCanvas.height * 0.64;
+        // Draw brand name with responsive font size
+        const textY = logicalHeight * 0.64;
         ctx.fillStyle = '#000000';
-        ctx.font = '56px "TikTok-Display-Bold", Arial, sans-serif';
+        
+        // Responsive font size based on canvas width (mobile-friendly)
+        const fontSize = Math.max(24, Math.min(56, logicalWidth * 0.052));
+        ctx.font = `${fontSize}px "TikTok-Display-Bold", Arial, sans-serif`;
         ctx.textAlign = 'center';
         ctx.fillText(currentBrand, centerX, textY);
 
@@ -1858,12 +1882,15 @@ function drawBrandClosingScreen() {
         const productQrcodes = brandQcodes[currentBrand];
         const randomQrcode = productQrcodes[Math.floor(Math.random() * productQrcodes.length)];
 
-        // Draw qrcode at fixed position (independent of image size)
-        const qrcodeX = centerX - 118;
-        const qrcodeY = closingCanvas.height * 0.704;
+        // Draw qrcode with responsive size
+        // Responsive QR code size (mobile-friendly)
+        const qrcodeSize = Math.max(100, Math.min(240, logicalWidth * 0.22));
+        const qrcodeX = centerX - qrcodeSize / 2;
+        const qrcodeY = logicalHeight * 0.704;
+        
         // Handle both p5.Image and HTML Image
         const qrImg = randomQrcode.canvas || randomQrcode;
-        ctx.drawImage(qrImg, qrcodeX, qrcodeY, 240, 240);
+        ctx.drawImage(qrImg, qrcodeX, qrcodeY, qrcodeSize, qrcodeSize);
     }
 }
 
