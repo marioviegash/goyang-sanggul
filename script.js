@@ -36,7 +36,7 @@ let brandWords = {
     'Scarlett': ['KINCLONG', 'WANGI'],
     'Vaseline': ['LEMBAB', 'HALUS'],
     'FAV Beauty': ['CERAH', 'NATURAL'],
-    'Xi Yaopin': ['HERBAL', 'SEHAT']
+    'Xi Yaopin Zhi': ['HERBAL', 'SEHAT']
 };
 
 // Flatten all words for gameplay with brand reference
@@ -390,7 +390,11 @@ async function startGame() {
 async function requestCameraAccess() {
     return new Promise((resolve, reject) => {
         navigator.mediaDevices.getUserMedia({ 
-            video: true // Use simple video constraint like p5.js does
+            video: {
+                width: { ideal: 1080 },  // try to get tall shape
+                height: { ideal: 1920 }, // 9:16 portrait
+                facingMode: "user"       // webcam or selfie (adjust as needed)
+            }
         })
         .then(stream => {
             // Store the stream for later use
@@ -806,9 +810,6 @@ function calculateFaceCenter(pose) {
     const leftEar = p.leftEar;
     const rightEar = p.rightEar;
     
-    // Check if nose exists and has good confidence
-    if (!nose || !nose.confidence || nose.confidence < 0.3) return null;
-    
     // Collect valid facial keypoints for face center calculation
     let points = [];
     if (nose && nose.confidence > 0.3) points.push({ x: nose.x, y: nose.y });
@@ -848,7 +849,7 @@ function gotPoses(results) {
     const faceCenter = calculateFaceCenter(currentPose);
     
     // No valid face detected
-    if (!faceCenter || faceCenter.noseScore < 0.35) {
+    if (!faceCenter) {
         poses = [];
         return;
     }
@@ -1084,7 +1085,7 @@ function setupBrandImages() {
         images['favbeauty_2'],
         images['favbeauty_3']
     ];
-    brandImages['Xi Yaopin'] = [
+    brandImages['Xi Yaopin Zhi'] = [
         images['xiyaopin_1'],
         images['xiyaopin_2'],
         images['xiyaopin_3']
@@ -1110,7 +1111,7 @@ function setupBrandImages() {
         images['qrcode_11'],
         images['qrcode_12']
     ];
-    brandQcodes['Xi Yaopin'] = [
+    brandQcodes['Xi Yaopin Zhi'] = [
         images['qrcode_13'],
         images['qrcode_14'],
         images['qrcode_15']
