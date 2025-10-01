@@ -22,8 +22,13 @@ let currentDetections = [];
 let trackedPersonDescriptor = null; // 128-dimension face descriptor (unique "fingerprint")
 let personLocked = false;
 let framesWithoutPerson = 0;
-let maxFramesWithoutPerson = 20; // ~0.67 seconds at 30fps
+let maxFramesWithoutPerson = 60; // ~2 seconds at 30fps - balanced between temporary exit and true exit
+let maxFramesOutsideCanvas = 20; // ~0.67 seconds - unlock faster if person leaves canvas boundaries
 let descriptorMatchThreshold = 0.6; // Euclidean distance threshold for same person (lower = stricter)
+let strictDescriptorThreshold = 0.50; // Very strict threshold when relocking to prevent person switching (lowered from 0.55)
+// Spatial tracking for canvas boundaries
+let lastKnownNosePosition = null; // Track last position to detect out-of-bounds
+let framesOutsideCanvas = 0; // Count frames where detected faces are outside canvas
 // Mobile responsiveness variables
 let isMobile = false;
 let scaleFactor = 1;
@@ -906,12 +911,51 @@ function processFaceDetections(detections) {
     if (!detections || detections.length === 0) {
         faceDetected = false;
         framesWithoutPerson++;
+        framesOutsideCanvas++; // Also count as outside canvas
         
-        // Unlock if person has been gone too long
+        // Quick unlock if person was last seen near boundaries and now gone
+        if (lastKnownNosePosition && framesOutsideCanvas > maxFramesOutsideCanvas && personLocked) {
+            console.log('⚡ Fast unlock: Person moved outside canvas boundaries');
+            unlockPerson();
+            return;
+        }
+        
+        // Standard unlock if person has been gone too long
         if (framesWithoutPerson > maxFramesWithoutPerson && personLocked) {
             unlockPerson();
         }
         return;
+    }
+    
+    // Check if any detected face is within canvas boundaries
+    const videoWidth = video ? video.width : 640;
+    const videoHeight = video ? video.height : 480;
+    let anyFaceInBounds = false;
+    
+    for (const detection of detections) {
+        const box = detection.detection.box;
+        const centerX = box.x + box.width / 2;
+        const centerY = box.y + box.height / 2;
+        
+        // Check if face center is within video boundaries (with small margin)
+        const margin = 50; // Allow 50px outside before considering "out of bounds"
+        if (centerX > -margin && centerX < videoWidth + margin &&
+            centerY > -margin && centerY < videoHeight + margin) {
+            anyFaceInBounds = true;
+            break;
+        }
+    }
+    
+    // If all detected faces are outside canvas, increment counter
+    if (!anyFaceInBounds) {
+        framesOutsideCanvas++;
+        if (framesOutsideCanvas > maxFramesOutsideCanvas && personLocked) {
+            console.log('⚡ Fast unlock: All detected faces outside canvas boundaries');
+            unlockPerson();
+            return;
+        }
+    } else {
+        framesOutsideCanvas = 0; // Reset if face found within bounds
     }
     
     // ============================================================
@@ -924,11 +968,13 @@ function processFaceDetections(detections) {
         trackedPersonDescriptor = firstPerson.descriptor;
         personLocked = true;
         framesWithoutPerson = 0;
+        framesOutsideCanvas = 0;
         
         // Get nose position from landmarks
         updateNosePosition(firstPerson);
+        lastKnownNosePosition = { x: noseX, y: noseY };
         
-        console.log('Locked onto person!');
+        console.log('🔒 Locked onto person! This person will be tracked exclusively.');
         return;
     }
     
@@ -954,10 +1000,16 @@ function processFaceDetections(detections) {
     // STEP 3: Accept or Reject based on descriptor match
     // ============================================================
     
-    if (bestMatch && bestDistance < descriptorMatchThreshold) {
+    // Use STRICTER threshold if person was missing (prevents locking onto someone else when you return)
+    // Use NORMAL threshold if person is being tracked continuously (handles fast movement better)
+    const wasRecentlyMissing = framesWithoutPerson > 5; // Missing for more than 0.5 seconds
+    const currentThreshold = wasRecentlyMissing ? strictDescriptorThreshold : descriptorMatchThreshold;
+    
+    if (bestMatch && bestDistance < currentThreshold) {
         // SAME PERSON! Update tracking
         faceDetected = true;
         framesWithoutPerson = 0;
+        framesOutsideCanvas = 0; // Reset since person is found
         
         // Slowly update the tracked descriptor (adapts to angle/expression changes)
         const descriptorSmoothing = 0.05;
@@ -969,16 +1021,27 @@ function processFaceDetections(detections) {
         
         // Update nose position
         updateNosePosition(bestMatch);
+        lastKnownNosePosition = { x: noseX, y: noseY };
+        
+        // Log when reacquiring after being missing
+        if (wasRecentlyMissing) {
+            console.log(`✅ Reacquired tracked person (distance: ${bestDistance.toFixed(3)})`);
+        }
         
     } else {
         // DIFFERENT PERSON or no good match
         faceDetected = false;
         framesWithoutPerson++;
         
-        // Unlock if wrong person for too long
+        // Log when rejecting during missing period
+        if (bestMatch && wasRecentlyMissing) {
+            console.log(`❌ Rejected face while person missing (distance: ${bestDistance.toFixed(3)}, threshold: ${currentThreshold.toFixed(3)})`);
+        }
+        
+        // Unlock if wrong person for too long (3 seconds)
         if (framesWithoutPerson > maxFramesWithoutPerson) {
             unlockPerson();
-            console.log('Person lost - unlocking...');
+            console.log('⚠️ Person lost for too long - unlocking...');
         }
     }
 }
@@ -997,9 +1060,14 @@ function updateNosePosition(detection) {
 
 // Unlock person and reset tracking
 function unlockPerson() {
+    if (personLocked) {
+        console.log('🔓 Unlocking person - ready to track new person');
+    }
     personLocked = false;
     trackedPersonDescriptor = null;
     framesWithoutPerson = 0;
+    framesOutsideCanvas = 0;
+    lastKnownNosePosition = null;
     faceDetected = false;
 }
 
