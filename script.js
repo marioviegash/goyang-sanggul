@@ -24,8 +24,8 @@ let personLocked = false;
 let framesWithoutPerson = 0;
 let maxFramesWithoutPerson = 60; // ~2 seconds at 30fps - balanced between temporary exit and true exit
 let maxFramesOutsideCanvas = 20; // ~0.67 seconds - unlock faster if person leaves canvas boundaries
-let descriptorMatchThreshold = 0.6; // Euclidean distance threshold for same person (lower = stricter)
-let strictDescriptorThreshold = 0.50; // Very strict threshold when relocking to prevent person switching (lowered from 0.55)
+let descriptorMatchThreshold = 0.65; // Euclidean distance threshold for same person (more lenient for distance tracking)
+let strictDescriptorThreshold = 0.55; // Strict threshold when relocking to prevent person switching
 // Spatial tracking for canvas boundaries
 let lastKnownNosePosition = null; // Track last position to detect out-of-bounds
 let framesOutsideCanvas = 0; // Count frames where detected faces are outside canvas
@@ -882,11 +882,11 @@ function startFaceDetection() {
         }
         
         try {
-            // Detect faces with optimized settings for speed
+            // Detect faces with settings optimized for distance detection
             const detections = await faceapi
                 .detectAllFaces(video.elt, new faceapi.TinyFaceDetectorOptions({
-                    inputSize: 160,        // Reduced from 224 for faster detection (20-30% faster!)
-                    scoreThreshold: 0.4     // Slightly lower for better detection during fast movement
+                    inputSize: 224,        // Increased for better small face detection at distance
+                    scoreThreshold: 0.3     // Lower threshold to detect faces farther from camera
                 }))
                 .withFaceLandmarks(true)
                 .withFaceDescriptors();
@@ -1011,8 +1011,17 @@ function processFaceDetections(detections) {
         framesWithoutPerson = 0;
         framesOutsideCanvas = 0; // Reset since person is found
         
-        // Slowly update the tracked descriptor (adapts to angle/expression changes)
-        const descriptorSmoothing = 0.05;
+        // Calculate face size to determine distance (smaller face = farther away)
+        const faceBox = bestMatch.detection.box;
+        const faceSize = faceBox.width * faceBox.height;
+        
+        // Adaptive descriptor smoothing: higher smoothing when face is small (far away)
+        // This helps maintain tracking as person moves closer/farther
+        const baseSmoothingFar = 0.08;  // When far away (small face)
+        const baseSmoothingNear = 0.04; // When close (large face)
+        const faceThreshold = 15000; // Approximate threshold for "small" face
+        const descriptorSmoothing = faceSize < faceThreshold ? baseSmoothingFar : baseSmoothingNear;
+        
         for (let i = 0; i < trackedPersonDescriptor.length; i++) {
             trackedPersonDescriptor[i] = 
                 trackedPersonDescriptor[i] * (1 - descriptorSmoothing) + 
@@ -1023,9 +1032,14 @@ function processFaceDetections(detections) {
         updateNosePosition(bestMatch);
         lastKnownNosePosition = { x: noseX, y: noseY };
         
-        // Log when reacquiring after being missing
+        // Log when reacquiring after being missing or when far away
         if (wasRecentlyMissing) {
-            console.log(`✅ Reacquired tracked person (distance: ${bestDistance.toFixed(3)})`);
+            console.log(`✅ Reacquired tracked person (distance: ${bestDistance.toFixed(3)}, face size: ${Math.round(faceSize)})`);
+        } else if (faceSize < faceThreshold) {
+            // Occasional log when tracking person at distance
+            if (Math.random() < 0.02) { // 2% chance per frame to avoid spam
+                console.log(`📏 Tracking at distance (face size: ${Math.round(faceSize)}, descriptor distance: ${bestDistance.toFixed(3)})`);
+            }
         }
         
     } else {
@@ -1033,12 +1047,20 @@ function processFaceDetections(detections) {
         faceDetected = false;
         framesWithoutPerson++;
         
-        // Log when rejecting during missing period
-        if (bestMatch && wasRecentlyMissing) {
-            console.log(`❌ Rejected face while person missing (distance: ${bestDistance.toFixed(3)}, threshold: ${currentThreshold.toFixed(3)})`);
+        // Log when rejecting during missing period or when match is close but not close enough
+        if (bestMatch) {
+            const faceBox = bestMatch.detection.box;
+            const faceSize = faceBox.width * faceBox.height;
+            
+            if (wasRecentlyMissing) {
+                console.log(`❌ Rejected face while person missing (distance: ${bestDistance.toFixed(3)}, threshold: ${currentThreshold.toFixed(3)}, face size: ${Math.round(faceSize)})`);
+            } else if (bestDistance > currentThreshold - 0.05 && bestDistance < currentThreshold + 0.1) {
+                // Close to threshold - might be tracking issue at distance
+                console.log(`⚠️ Near-miss tracking (distance: ${bestDistance.toFixed(3)}, threshold: ${currentThreshold.toFixed(3)}, face size: ${Math.round(faceSize)})`);
+            }
         }
         
-        // Unlock if wrong person for too long (3 seconds)
+        // Unlock if wrong person for too long
         if (framesWithoutPerson > maxFramesWithoutPerson) {
             unlockPerson();
             console.log('⚠️ Person lost for too long - unlocking...');
