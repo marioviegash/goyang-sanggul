@@ -372,6 +372,8 @@ async function startGame() {
 
 async function requestCameraAccess() {
     return new Promise((resolve, reject) => {
+        console.log('🎥 Requesting camera: 1080x1920 (portrait)...');
+        
         navigator.mediaDevices.getUserMedia({ 
             video: {
                 width: { ideal: 1080 },  // try to get tall shape
@@ -380,11 +382,26 @@ async function requestCameraAccess() {
             }
         })
         .then(stream => {
+            // Check what resolution we actually got
+            const videoTrack = stream.getVideoTracks()[0];
+            const settings = videoTrack.getSettings();
+            console.log('✅ Camera granted!');
+            console.log('   Requested: 1080x1920 (portrait)');
+            console.log('   Actual:   ', settings.width, 'x', settings.height);
+            console.log('   Ratio:    ', (settings.width / settings.height).toFixed(2));
+            
+            // Warn if not portrait
+            if (settings.width > settings.height) {
+                console.warn('⚠️  Camera is LANDSCAPE, but canvas is PORTRAIT!');
+                console.warn('    This will cause coordinate mismatch!');
+            }
+            
             // Store the stream for later use
             window.cameraStream = stream;
             resolve(stream);
         })
         .catch(error => {
+            console.error('❌ Camera request failed:', error);
             reject(error);
         });
     });
@@ -664,6 +681,8 @@ function initializeGame() {
     
     // Calculate proper canvas size with 9:16 aspect ratio (1080x1920 target)
     const dimensions = calculateCanvasDimensions();
+    
+    console.log('🖼️  Canvas size:', dimensions.width, 'x', dimensions.height);
     
     // Create p5.js canvas with proper 9:16 aspect ratio
     const canvas = createCanvas(dimensions.width, dimensions.height);
@@ -996,6 +1015,12 @@ function updateNosePosition(detection) {
     // Update nose position in video coordinates
     noseX = noseTip.x;
     noseY = noseTip.y;
+    
+    // Debug: Log coordinates once per second
+    if (!window.lastCoordLog || Date.now() - window.lastCoordLog > 1000) {
+        console.log('👃 Nose in video space:', Math.round(noseX), 'x', Math.round(noseY));
+        window.lastCoordLog = Date.now();
+    }
 }
 
 // Unlock person and reset tracking
@@ -1338,7 +1363,7 @@ function draw() {
         }
         lastFrameTime = currentTime;
 
-        // Now apply flip transformation ONLY for video and nose detection
+        // Draw video
         push();
         translate(width, 0);
         scale(-1, 1);
@@ -1633,18 +1658,18 @@ function drawCheckpoints(letter, letterIndex, letterCenterX, letterCenterY, font
     const letterLeft = letterCenterX - letterWidth / 2;
     const letterTop = letterCenterY - letterHeight / 2 + fontSize * 0.05; // Slight downward adjustment
     
-    // Match the collision detection radius for visual consistency
-    const checkpointRadius = Math.max(50, fontSize * 0.25);
+    // FLEXIBLE checkpoint radius - adapts to canvas size (MUST match checkCheckpointCollision!)
+    const baseRadius = Math.min(width, height) * 0.06; // 6% of smallest dimension
+    const checkpointRadius = Math.max(baseRadius, fontSize * 0.3);
     
     checkpoints.forEach((checkpoint, idx) => {
         const checkpointX = letterLeft + (checkpoint.x * letterWidth);
         const checkpointY = letterTop + (checkpoint.y * letterHeight);
-
-        // Draw checkpoint indicator
+        
+        // Draw checkpoint with clear visual feedback
         push();
         noFill();
         noStroke();
-        
         ellipse(checkpointX, checkpointY, checkpointRadius);
         
         pop();
@@ -1900,12 +1925,25 @@ function checkTextFilling() {
     const wordY = height * 0.6; // Match the new letter position
     const fontSize = Math.min(width * 0.3, height * 0.3); // MUST match the drawing font size!
     
-    // Convert nose position to screen coordinates (accounting for mirroring)
-    const screenX = width - noseX; // Flip X coordinate
-    const screenY = noseY;
+    // FLEXIBLE COORDINATE HANDLING: Transform video coordinates to canvas coordinates
+    // This works whether camera is portrait (1080x1920) or landscape (1920x1080)
+    const transformed = transformNoseCoordinates(noseX, noseY);
+    
+    // Use transformed coordinates
+    // Convert to screen coordinates (accounting for mirroring to match video display)
+    const screenX = width - transformed.x;
+    const screenY = transformed.y;
+    
+    // Debug: Log collision coordinates once per second
+    if (!window.lastCollisionLog || Date.now() - window.lastCollisionLog > 1000) {
+        console.log('🎯 Collision - Video:', Math.round(noseX), 'x', Math.round(noseY),
+                    '→ Transformed:', Math.round(transformed.x), 'x', Math.round(transformed.y),
+                    '→ Screen:', Math.round(screenX), 'x', Math.round(screenY));
+        window.lastCollisionLog = Date.now();
+    }
         
-        // Get the actual character index for the current letter
-        const actualIndex = getActualLetterIndex(currentLetterIndex);
+    // Get the actual character index for the current letter
+    const actualIndex = getActualLetterIndex(currentLetterIndex);
         
     if (actualIndex >= 0 && actualIndex < currentWord.length && !wordProgress[actualIndex]) {
         // Check checkpoint-based collision for this letter
@@ -1943,9 +1981,11 @@ function checkCheckpointCollision(letter, letterIndex, screenX, screenY, letterC
         const checkpointX = letterLeft + (checkpoint.x * letterWidth);
         const checkpointY = letterTop + (checkpoint.y * letterHeight);
         
-        // Check if nose is within checkpoint radius (responsive size)
-        // Increased from 15% to 25% for easier hitting
-        const checkpointRadius = Math.max(50, fontSize * 0.25); // 25% of font size for easier touch
+        // FLEXIBLE checkpoint radius - adapts to canvas size for better hit detection
+        // Larger radius for better hit detection across different screen sizes and camera orientations
+        const baseRadius = Math.min(width, height) * 0.06; // 6% of smallest dimension
+        const checkpointRadius = Math.max(baseRadius, fontSize * 0.3); // MUST match drawCheckpoints()
+        
         const distance = Math.sqrt(
             Math.pow(screenX - checkpointX, 2) + 
             Math.pow(screenY - checkpointY, 2)
@@ -1954,6 +1994,9 @@ function checkCheckpointCollision(letter, letterIndex, screenX, screenY, letterC
         if (distance < checkpointRadius) {
             // Mark checkpoint as hit
             letterCheckpoints[letterIndex][checkpoint.label] = true;
+            
+            // Debug log for testing on different screen sizes
+            console.log(`✓ Checkpoint ${checkpoint.label} HIT for letter ${letter} (distance: ${Math.round(distance)}px / radius: ${Math.round(checkpointRadius)}px)`);
         }
     });
 }
@@ -1979,10 +2022,17 @@ function checkLetterCompletionByCheckpoints(letterIndex, letter) {
     // Calculate completion percentage
     const completionPercentage = hitCount / checkpoints.length;
     
+    // Debug log for testing on different screen sizes
+    if (hitCount > 0) {
+        console.log(`Letter ${letter} progress: ${hitCount}/${checkpoints.length} checkpoints (${Math.round(completionPercentage * 100)}%)`);
+    }
+    
     // Require both checkpoints to be hit (100% - ensures the letter shape is properly drawn)
     const requiredPercentage = 1.0;
     
     if (completionPercentage >= requiredPercentage) {
+        console.log(`✓ Letter ${letter} ready to complete! Waiting ${completionDelayMs}ms...`);
+        
         // Start completion timer if not already started
         if (!letterCompletionTimers[letterIndex]) {
             letterCompletionTimers[letterIndex] = Date.now();
@@ -1995,6 +2045,8 @@ function checkLetterCompletionByCheckpoints(letterIndex, letter) {
             // Mark letter as complete FIRST
             delete letterCompletionTimers[letterIndex];
             wordProgress[letterIndex] = true;
+            
+            console.log(`🎉 Letter ${letter} COMPLETED!`);
             
             // Clear checkpoints for this letter
             letterCheckpoints[letterIndex] = {};
